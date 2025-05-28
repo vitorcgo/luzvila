@@ -60,12 +60,15 @@ if uploaded_file:
         df = df_raw.iloc[:, [9, 6, 8]].copy()
         df.columns = ["Especialidade", "Convenio", "Data"]
 
+        # Normaliza a coluna Convenio para maiúsculo e sem espaços extras
+        df["Convenio"] = df["Convenio"].astype(str).str.strip().str.upper()
+
         # Remove linhas vazias
         df.dropna(subset=["Especialidade", "Convenio", "Data"], inplace=True)
 
         # Classifica tipo de convênio
         df["TipoConvenio"] = df["Convenio"].apply(
-            lambda x: "GRUPO" if "AMIL" in str(x).upper() else "EXTRA GRUPO"
+            lambda x: "GRUPO" if "AMIL" in x else "EXTRA GRUPO"
         )
 
         # Converte data e remove inválidas
