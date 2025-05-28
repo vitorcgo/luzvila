@@ -53,7 +53,7 @@ if uploaded_file:
         st.write("### Amostra dos dados da coluna Convenio")
         st.write(df["Convenio"].head(20))
 
-        # Normaliza a coluna Convenio: string, maiúscula, sem espaços
+        # Normaliza a coluna Convenio: string, maiúscula, sem espaços nas extremidades
         df["Convenio"] = df["Convenio"].astype(str).str.strip().str.upper()
 
         # INSPEÇÃO: valores únicos para verificar convenios
