@@ -1,8 +1,7 @@
-# app.py
 import pandas as pd
 import streamlit as st
 from io import BytesIO
-import zipfile   # <-- usado pra verificar se o .xls é um .xlsx "disfarçado"
+import zipfile
 
 # ──────────────────────────────
 # Configuração da página
@@ -21,11 +20,7 @@ if uploaded_file:
     file_ext  = file_name.split(".")[-1]
 
     try:
-        # ────────────────────────────────────────────────────────────────
-        # 1) Verifica se o .xls é, na verdade, um .xlsx disfarçado
-        #    (um .xls não é ZIP, já o .xlsx é)
-        # ────────────────────────────────────────────────────────────────
-        file_bytes = BytesIO(uploaded_file.read())        # lê todo o arquivo na memória
+        file_bytes = BytesIO(uploaded_file.read())
         file_bytes.seek(0)
 
         if file_ext == "xls" and zipfile.is_zipfile(file_bytes):
@@ -35,17 +30,14 @@ if uploaded_file:
             )
             st.stop()
 
-        # ────────────────────────────────────────────────────────────────
-        # 2) Leitura conforme a extensão
-        # ────────────────────────────────────────────────────────────────
         if file_ext == "xls":
             df_raw = pd.read_excel(
                 file_bytes,
                 sheet_name="Report",
                 header=None,
-                engine="xlrd"            # usa xlrd 1.2.0
+                engine="xlrd"
             )
-        else:  # .xlsx
+        else:
             df_raw = pd.read_excel(
                 file_bytes,
                 sheet_name="Report",
@@ -53,25 +45,36 @@ if uploaded_file:
                 engine="openpyxl"
             )
 
-        # ────────────────────────────────────────────────────────────────
-        # 3) Seu processamento original
-        # ────────────────────────────────────────────────────────────────
         # Seleciona colunas: Especialidade (9), Convênio (6), Data (8)
         df = df_raw.iloc[:, [9, 6, 8]].copy()
         df.columns = ["Especialidade", "Convenio", "Data"]
 
-        # Normaliza a coluna Convenio para maiúsculo e sem espaços extras
+        # INSPEÇÃO: amostra da coluna Convenio para verificar dados
+        st.write("### Amostra dos dados da coluna Convenio")
+        st.write(df["Convenio"].head(20))
+
+        # Normaliza a coluna Convenio: string, maiúscula, sem espaços
         df["Convenio"] = df["Convenio"].astype(str).str.strip().str.upper()
 
-        # Remove linhas vazias
+        # INSPEÇÃO: valores únicos para verificar convenios
+        st.write("### Valores únicos na coluna Convenio")
+        st.write(df["Convenio"].unique())
+
+        # Quantidade de linhas antes e depois do dropna
+        st.write(f"Linhas totais antes do dropna: {len(df)}")
         df.dropna(subset=["Especialidade", "Convenio", "Data"], inplace=True)
+        st.write(f"Linhas após dropna: {len(df)}")
 
-        # Classifica tipo de convênio
-        df["TipoConvenio"] = df["Convenio"].apply(
-            lambda x: "GRUPO" if "AMIL" in x else "EXTRA GRUPO"
-        )
+        # Função que classifica TipoConvenio conforme presença de "AMIL"
+        def detectar_tipo_convenio(convenio):
+            if "AMIL" in convenio:
+                return "GRUPO"
+            else:
+                return "EXTRA GRUPO"
 
-        # Converte data e remove inválidas
+        df["TipoConvenio"] = df["Convenio"].apply(detectar_tipo_convenio)
+
+        # Converte coluna Data para datetime e remove datas inválidas
         df["Data"] = pd.to_datetime(df["Data"], dayfirst=True, errors="coerce").dt.date
         df.dropna(subset=["Data"], inplace=True)
 
@@ -82,7 +85,6 @@ if uploaded_file:
               .reset_index(name="Total")
         )
 
-        # Tabela pivô formatada
         tabela_formatada = resumo.pivot_table(
             index=["Especialidade", "TipoConvenio"],
             columns="Data",
@@ -90,13 +92,11 @@ if uploaded_file:
             fill_value=0
         )
 
-        # ────────────────────────────────────────────────────────────────
-        # 4) Exibição e download
-        # ────────────────────────────────────────────────────────────────
+        # Exibe tabela formatada
         st.subheader("📊 Tabela de Atendimentos")
         st.dataframe(tabela_formatada, use_container_width=True)
 
-        # Download em Excel
+        # Botão para download da tabela em Excel
         buffer = BytesIO()
         tabela_formatada.to_excel(buffer)
         buffer.seek(0)
@@ -108,9 +108,7 @@ if uploaded_file:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
-        # ────────────────────────────────────────────────────────────────
-        # 5) Análise de volume de atendimentos por dia
-        # ────────────────────────────────────────────────────────────────
+        # Análise de volume total por dia
         total_por_dia = df.groupby("Data").size().reset_index(name="TotalPacientes")
 
         if not total_por_dia.empty:
