@@ -2,6 +2,8 @@ import pandas as pd
 import streamlit as st
 from io import BytesIO
 import zipfile
+import unicodedata
+import re
 
 # ──────────────────────────────
 # Configuração da página
@@ -9,6 +11,23 @@ import zipfile
 st.set_page_config(page_title="Análise de Atendimentos por Especialidade", layout="wide")
 st.title("Análise de Atendimentos por Especialidade, Convênio e Data")
 st.markdown("_Envie sua planilha de atendimentos para gerar uma tabela agrupada e visualização personalizada._")
+
+# Função para limpar texto: remove acentos, espaços extras e deixa maiúsculo
+def limpar_texto(texto):
+    if not isinstance(texto, str):
+        return ""
+    texto = unicodedata.normalize('NFKD', texto).encode('ASCII', 'ignore').decode('ASCII')
+    texto = texto.upper()
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
+
+# Função que classifica TipoConvenio conforme presença de "AMIL"
+def detectar_tipo_convenio(convenio):
+    convenio_limpo = limpar_texto(convenio)
+    if "AMIL" in convenio_limpo:
+        return "GRUPO"
+    else:
+        return "EXTRA GRUPO"
 
 # ──────────────────────────────
 # Upload do arquivo
@@ -49,29 +68,13 @@ if uploaded_file:
         df = df_raw.iloc[:, [9, 6, 8]].copy()
         df.columns = ["Especialidade", "Convenio", "Data"]
 
-        # INSPEÇÃO: amostra da coluna Convenio para verificar dados
-        st.write("### Amostra dos dados da coluna Convenio")
-        st.write(df["Convenio"].head(20))
+        # Limpa e normaliza coluna Convenio
+        df["Convenio"] = df["Convenio"].astype(str).apply(limpar_texto)
 
-        # Normaliza a coluna Convenio: string, maiúscula, sem espaços nas extremidades
-        df["Convenio"] = df["Convenio"].astype(str).str.strip().str.upper()
-
-        # INSPEÇÃO: valores únicos para verificar convenios
-        st.write("### Valores únicos na coluna Convenio")
-        st.write(df["Convenio"].unique())
-
-        # Quantidade de linhas antes e depois do dropna
-        st.write(f"Linhas totais antes do dropna: {len(df)}")
+        # Remove linhas com dados faltando
         df.dropna(subset=["Especialidade", "Convenio", "Data"], inplace=True)
-        st.write(f"Linhas após dropna: {len(df)}")
 
-        # Função que classifica TipoConvenio conforme presença de "AMIL"
-        def detectar_tipo_convenio(convenio):
-            if "AMIL" in convenio:
-                return "GRUPO"
-            else:
-                return "EXTRA GRUPO"
-
+        # Classifica TipoConvenio
         df["TipoConvenio"] = df["Convenio"].apply(detectar_tipo_convenio)
 
         # Converte coluna Data para datetime e remove datas inválidas
